@@ -6,7 +6,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-
+# colour for each risk level used in the predictions table
 RISK_COLORS = {
     "HIGH":   colors.HexColor("#8B0000"),
     "MEDIUM": colors.HexColor("#8B6914"),
@@ -15,8 +15,8 @@ RISK_COLORS = {
 
 
 def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=None, pass_fail=None, category=None) -> bytes:
-    """Build a PDF report for one student and return it as bytes."""
-
+    # we write the pdf into memory instead of saving it to disk
+    # this lets streamlit serve it as a download without creating temporary files
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -28,9 +28,9 @@ def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=
     styles = getSampleStyleSheet()
     elements = []
 
-    # ── Title ──────────────────────────────────────────────────────────────
-    title_style = ParagraphStyle("title", fontSize=20, fontName="Helvetica-Bold", spaceAfter=4)
-    sub_style   = ParagraphStyle("sub",   fontSize=11, fontName="Helvetica",      textColor=colors.grey)
+    # title section
+    title_style = ParagraphStyle("title", fontSize=20, fontName="Helvetica-Bold", spaceAfter=12)
+    sub_style   = ParagraphStyle("sub",   fontSize=11, fontName="Helvetica", textColor=colors.grey, spaceBefore=6)
 
     elements.append(Paragraph("Student Intelligence Platform", title_style))
     elements.append(Paragraph("Academic Performance Report", sub_style))
@@ -38,7 +38,7 @@ def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=
     elements.append(HRFlowable(width="100%", thickness=1, color=colors.grey))
     elements.append(Spacer(1, 0.5 * cm))
 
-    # ── Student info ───────────────────────────────────────────────────────
+    # student profile table
     section_style = ParagraphStyle("section", fontSize=13, fontName="Helvetica-Bold", spaceAfter=6, spaceBefore=10)
     body_style    = ParagraphStyle("body",    fontSize=11, fontName="Helvetica", spaceAfter=4)
 
@@ -56,12 +56,13 @@ def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=
         ["Past Failures",  str(int(student_row["failures"]))],
     ]
 
+    # alternating row background makes the table easier to read
     info_table = Table(info_data, colWidths=[5 * cm, 11 * cm])
     info_table.setStyle(TableStyle([
-        ("FONTNAME",    (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME",    (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE",    (0, 0), (-1, -1), 11),
-        ("TEXTCOLOR",   (0, 0), (0, -1), colors.HexColor("#333333")),
+        ("FONTNAME",       (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME",       (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE",       (0, 0), (-1, -1), 11),
+        ("TEXTCOLOR",      (0, 0), (0, -1), colors.HexColor("#333333")),
         ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8f8f8"), colors.white]),
         ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
         ("TOPPADDING",     (0, 0), (-1, -1), 6),
@@ -70,10 +71,11 @@ def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=
     elements.append(info_table)
     elements.append(Spacer(1, 0.6 * cm))
 
-    # ── Predictions ────────────────────────────────────────────────────────
+    # model predictions table
     elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
     elements.append(Paragraph("Model Predictions", section_style))
 
+    # use the values passed in directly — if not provided, fall back to the row
     risk      = risk_level      if risk_level      is not None else student_row["risk_level"]
     pred_g    = predicted_grade if predicted_grade is not None else student_row["predicted_grade"]
     pf        = pass_fail       if pass_fail       is not None else student_row["pass_fail"]
@@ -89,28 +91,29 @@ def generate_pdf(student_row, recommendations, risk_level=None, predicted_grade=
 
     pred_table = Table(pred_data, colWidths=[5 * cm, 11 * cm])
     pred_table.setStyle(TableStyle([
-        ("FONTNAME",    (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME",    (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE",    (0, 0), (-1, -1), 11),
+        ("FONTNAME",       (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME",       (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE",       (0, 0), (-1, -1), 11),
         ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.HexColor("#f8f8f8"), colors.white]),
         ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
         ("TOPPADDING",     (0, 0), (-1, -1), 6),
         ("LEFTPADDING",    (0, 0), (-1, -1), 8),
-        # Highlight the risk level row
-        ("BACKGROUND",  (1, 3), (1, 3), risk_color),
-        ("TEXTCOLOR",   (1, 3), (1, 3), colors.white),
-        ("FONTNAME",    (1, 3), (1, 3), "Helvetica-Bold"),
+        # highlight the risk level cell with the matching colour
+        ("BACKGROUND",     (1, 3), (1, 3), risk_color),
+        ("TEXTCOLOR",      (1, 3), (1, 3), colors.white),
+        ("FONTNAME",       (1, 3), (1, 3), "Helvetica-Bold"),
     ]))
     elements.append(pred_table)
     elements.append(Spacer(1, 0.6 * cm))
 
-    # ── Recommendations ────────────────────────────────────────────────────
+    # recommendations list
     elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
     elements.append(Paragraph("Recommendations", section_style))
 
     for rec in recommendations:
         elements.append(Paragraph(f"• {rec}", body_style))
 
+    # footer
     elements.append(Spacer(1, 1 * cm))
     elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.lightgrey))
     elements.append(Spacer(1, 0.3 * cm))

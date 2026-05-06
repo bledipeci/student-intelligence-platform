@@ -38,16 +38,30 @@ if "df" not in st.session_state or st.session_state.get("df_version") != 3:
 
 df = st.session_state.df
 
-# ── Sidebar navigation ─────────────────────────────────────────────────────
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("", ["Home", "Dashboard"], label_visibility="collapsed")
+# header
+st.title("Student Intelligence Platform")
+st.caption("Predictive analytics and risk assessment powered by Machine Learning")
 
-st.sidebar.divider()
+filtered = df.copy()
 
-# ── Home page ──────────────────────────────────────────────────────────────
-if page == "Home":
-    st.title("Student Intelligence Platform")
-    st.subheader("An end-to-end ML system for student analytics and risk assessment")
+st.divider()
+
+# top metrics
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Students",       len(filtered))
+col2.metric("Avg Predicted Grade",  f"{filtered['predicted_grade'].mean():.1f} / 20")
+col3.metric("Pass Rate",            f"{(filtered['pass_fail'] == 'Pass').mean():.1%}")
+col4.metric("High Risk Students",   int((filtered["risk_level"] == "HIGH").sum()))
+
+st.divider()
+
+# tabs
+tab0, tab1, tab2, tab3, tab4 = st.tabs(["Home", "Overview", "Student Browser", "Student Report", "Live Prediction"])
+
+
+# home tab
+with tab0:
+    st.subheader("An end-to-end ml system for student analytics and risk assessment")
     st.divider()
 
     col1, col2 = st.columns(2)
@@ -60,9 +74,10 @@ if page == "Home":
 - Trains **3 machine learning models** to predict performance
 - Classifies each student into a **risk level** with actionable recommendations
 - Generates a downloadable **PDF report** per student
+
         """)
 
-        st.markdown("### Tech Stack")
+        st.markdown("### Tech stack")
         st.markdown("""
 | Layer | Technology |
 |---|---|
@@ -80,7 +95,7 @@ if page == "Home":
 
 **Logistic Regression** — classifies whether the student will pass or fail
 
-**Decision Tree** — categorises performance as Low, Medium, or High
+**Random Forest** — categorises performance as low, medium, or high
         """)
 
         st.markdown("### Dataset")
@@ -93,53 +108,37 @@ Real-world data from the [UCI Student Performance Dataset](https://www.kaggle.co
 
     st.divider()
     st.markdown("### How to use")
-    col_a, col_b, col_c = st.columns(3)
-    col_a.info("**1. Overview**\nSee grade distribution, risk breakdown, and pass rates across all students.")
-    col_b.info("**2. Student Browser**\nSearch and filter all students by name, subject, or risk level.")
-    col_c.info("**3. Student Report**\nSelect any student to see their predictions, risk level, and download a PDF report.")
-
-    st.stop()
-
-# ── Dashboard filters (only shown when on Dashboard page) ──────────────────
-st.sidebar.markdown("**Filters**")
-subject_filter = st.sidebar.selectbox("Subject", ["All", "Maths", "Portuguese"])
-risk_filter = st.sidebar.multiselect(
-    "Risk Level", ["HIGH", "MEDIUM", "LOW"], default=["HIGH", "MEDIUM", "LOW"]
-)
-if not risk_filter:
-    st.sidebar.warning("Select at least one risk level.")
-    risk_filter = ["HIGH", "MEDIUM", "LOW"]
-
-filtered = df.copy()
-if subject_filter != "All":
-    filtered = filtered[filtered["subject"] == subject_filter]
-filtered = filtered[filtered["risk_level"].isin(risk_filter)]
-
-# ── Header ─────────────────────────────────────────────────────────────────
-st.title("Student Intelligence Platform")
-st.caption("Predictive analytics and risk assessment powered by Machine Learning")
-st.divider()
-
-# ── Top metrics ────────────────────────────────────────────────────────────
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Students",       len(filtered))
-col2.metric("Avg Predicted Grade",  f"{filtered['predicted_grade'].mean():.1f} / 20")
-col3.metric("Pass Rate",            f"{(filtered['pass_fail'] == 'Pass').mean():.1%}")
-col4.metric("High Risk Students",   int((filtered["risk_level"] == "HIGH").sum()))
-
-st.divider()
-
-# ── Tabs ───────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Student Browser", "Student Report", "Live Prediction"])
+    c1, c2, c3, c4 = st.columns(4)
+    c1.info("**Overview**\nFeature importance, grade distribution, and risk breakdown.")
+    c2.info("**Student Browser**\nSearch and filter all 1,048 students by name or risk level.")
+    c3.info("**Student Report**\nFull profile, predictions, recommendations, and PDF download.")
+    c4.info("**Live Prediction**\nAdjust sliders and see predictions update in real time.")
 
 
-# ── Tab 1: Overview ────────────────────────────────────────────────────────
+# overview tab
 with tab1:
     st.subheader("Feature Importance (Random Forest)")
     st.caption("How much each input contributes to predicting student performance category.")
+    feature_labels = {
+        "G1": "Period 1 Grade", "G2": "Period 2 Grade",
+        "studytime": "Study Time", "failures": "Past Failures",
+        "absences": "Absences", "traveltime": "Travel Time",
+        "alcohol": "Alcohol Consumption", "goout": "Going Out",
+        "freetime": "Free Time", "romantic": "Romantic Relationship",
+        "health": "Health Status", "famrel": "Family Relationship",
+        "famsize": "Family Size", "Pstatus": "Parents Together",
+        "schoolsup": "School Support", "famsup": "Family Support",
+        "paid": "Paid Classes", "activities": "Activities",
+        "nursery": "Attended Nursery", "higher": "Wants Higher Ed",
+        "internet": "Internet at Home", "sex": "Sex",
+        "address": "Urban Address", "age": "Age", "school": "School",
+        "parent_edu": "Parent Education", "Medu": "Mother Education",
+        "Fedu": "Father Education", "Mjob": "Mother's Job",
+        "Fjob": "Father's Job",
+    }
     _, _, rf = load_models()
     feat_imp = pd.DataFrame({
-        "Feature":    get_feature_columns(),
+        "Feature":    [feature_labels.get(c, c) for c in get_feature_columns()],
         "Importance": rf.feature_importances_,
     }).sort_values("Importance", ascending=True).tail(15)
     fig = px.bar(
@@ -222,7 +221,7 @@ with tab1:
         st.plotly_chart(fig, use_container_width=True)
 
 
-# ── Tab 2: Student Browser ─────────────────────────────────────────────────
+# student browser tab
 with tab2:
     st.subheader(f"Showing {len(filtered)} students")
 
@@ -255,7 +254,7 @@ with tab2:
     )
 
 
-# ── Tab 3: Student Report ──────────────────────────────────────────────────
+# student report tab
 with tab3:
     st.subheader("Individual Student Report")
 
@@ -296,8 +295,9 @@ with tab3:
     study_label = {1: "<2h", 2: "2-5h", 3: "5-10h", 4: ">10h"}
 
     def field(label, value):
-        st.markdown(f"**{label}**")
-        st.markdown(str(value))
+        a, b = st.columns([1.2, 1.8])
+        a.markdown(f"**{label}**")
+        b.markdown(str(value))
 
     col_a, col_b, col_c = st.columns(3)
 
@@ -334,6 +334,7 @@ with tab3:
         field("Internet",        "Yes" if student_row["internet"] == 1 else "No")
         field("Romantic rel.",   "Yes" if student_row["romantic"] == 1 else "No")
 
+    st.divider()
     st.markdown("### Recommendations")
     for rec in recommendations:
         st.info(rec)
@@ -354,7 +355,7 @@ with tab3:
     )
 
 
-# ── Tab 4: Live Prediction ─────────────────────────────────────────────────
+# live prediction tab
 with tab4:
     st.subheader("Live Prediction")
     st.caption("Adjust the inputs below to predict a hypothetical student's outcome instantly.")
